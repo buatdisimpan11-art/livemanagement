@@ -8,14 +8,17 @@ import {
   Settings,
   LogOut,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Shield
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 
-const menuItems = [
+const mitraMenuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: Store, label: 'Studios', path: '/studios' },
   { icon: Users, label: 'Akun Shopee', path: '/accounts' },
@@ -24,10 +27,18 @@ const menuItems = [
   { icon: Settings, label: 'Pengaturan', path: '/settings' },
 ];
 
+const adminMenuItems = [
+  { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
+  { icon: Settings, label: 'Pengaturan', path: '/settings' },
+];
+
 export function AppSidebar() {
   const location = useLocation();
   const { signOut, user } = useAuth();
+  const { isAdmin, loading: roleLoading } = useUserRole();
   const [collapsed, setCollapsed] = useState(false);
+
+  const menuItems = isAdmin ? adminMenuItems : mitraMenuItems;
 
   return (
     <aside 
@@ -63,6 +74,16 @@ export function AppSidebar() {
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </Button>
       </div>
+
+      {/* Admin Badge */}
+      {!collapsed && isAdmin && !roleLoading && (
+        <div className="px-4 py-2">
+          <Badge variant="default" className="w-full justify-center gap-1 bg-primary/20 text-primary hover:bg-primary/20">
+            <Shield className="w-3 h-3" />
+            Super Admin
+          </Badge>
+        </div>
+      )}
 
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-1">
