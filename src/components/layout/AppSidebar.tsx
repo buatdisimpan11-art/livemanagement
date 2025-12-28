@@ -38,7 +38,13 @@ export function AppSidebar() {
   const { isAdmin, loading: roleLoading } = useUserRole();
   const [collapsed, setCollapsed] = useState(false);
 
-  const menuItems = isAdmin ? adminMenuItems : mitraMenuItems;
+  // Always show admin menu items while loading to prevent flicker for admins
+  // Or show minimal menu during loading
+  const menuItems = roleLoading 
+    ? [{ icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' }]
+    : isAdmin 
+      ? adminMenuItems 
+      : mitraMenuItems;
 
   return (
     <aside 
@@ -87,29 +93,38 @@ export function AppSidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-1">
-        {menuItems.map((item) => {
-          const isActive = location.pathname === item.path;
-          return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group",
-                isActive 
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-glow" 
-                  : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              )}
-            >
-              <item.icon className={cn(
-                "w-5 h-5 shrink-0 transition-transform duration-200",
-                !isActive && "group-hover:scale-110"
-              )} />
-              {!collapsed && (
-                <span className="font-medium text-sm">{item.label}</span>
-              )}
-            </Link>
-          );
-        })}
+        {roleLoading ? (
+          // Skeleton loading for menu items
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-10 bg-sidebar-accent/30 rounded-lg animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          menuItems.map((item) => {
+            const isActive = location.pathname === item.path;
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group",
+                  isActive 
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-glow" 
+                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                )}
+              >
+                <item.icon className={cn(
+                  "w-5 h-5 shrink-0 transition-transform duration-200",
+                  !isActive && "group-hover:scale-110"
+                )} />
+                {!collapsed && (
+                  <span className="font-medium text-sm">{item.label}</span>
+                )}
+              </Link>
+            );
+          })
+        )}
       </nav>
 
       {/* User & Logout */}
