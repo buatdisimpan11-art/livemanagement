@@ -9,7 +9,8 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  Shield
+  Shield,
+  BarChart3
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,7 @@ const mitraMenuItems = [
   { icon: Users, label: 'Akun Shopee', path: '/accounts' },
   { icon: Package, label: 'Gudang Produk', path: '/products' },
   { icon: Zap, label: 'Optimasi Live', path: '/optimize' },
+  { icon: BarChart3, label: 'Statistik', path: '/statistics' },
   { icon: Settings, label: 'Pengaturan', path: '/settings' },
 ];
 

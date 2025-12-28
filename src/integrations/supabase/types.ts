@@ -128,6 +128,81 @@ export type Database = {
         }
         Relationships: []
       }
+      product_statistics: {
+        Row: {
+          account_id: string
+          add_to_cart: number | null
+          clicks: number | null
+          created_at: string
+          data_date: string
+          gmv_created: number | null
+          gmv_shipped: number | null
+          id: string
+          orders_created: number | null
+          orders_shipped: number | null
+          product_name: string
+          products_sold_created: number | null
+          products_sold_shipped: number | null
+          ranking: number | null
+          studio_id: string
+          uploaded_at: string
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          add_to_cart?: number | null
+          clicks?: number | null
+          created_at?: string
+          data_date: string
+          gmv_created?: number | null
+          gmv_shipped?: number | null
+          id?: string
+          orders_created?: number | null
+          orders_shipped?: number | null
+          product_name: string
+          products_sold_created?: number | null
+          products_sold_shipped?: number | null
+          ranking?: number | null
+          studio_id: string
+          uploaded_at?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          add_to_cart?: number | null
+          clicks?: number | null
+          created_at?: string
+          data_date?: string
+          gmv_created?: number | null
+          gmv_shipped?: number | null
+          id?: string
+          orders_created?: number | null
+          orders_shipped?: number | null
+          product_name?: string
+          products_sold_created?: number | null
+          products_sold_shipped?: number | null
+          ranking?: number | null
+          studio_id?: string
+          uploaded_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_statistics_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "shopee_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_statistics_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "studios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string | null

@@ -14,6 +14,7 @@ import Studios from "./pages/Studios";
 import Accounts from "./pages/Accounts";
 import Products from "./pages/Products";
 import Optimize from "./pages/Optimize";
+import Statistics from "./pages/Statistics";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -87,6 +88,7 @@ function AppRoutes() {
       <Route path="/accounts" element={<ProtectedRoute><Accounts /></ProtectedRoute>} />
       <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
       <Route path="/optimize" element={<ProtectedRoute><Optimize /></ProtectedRoute>} />
+      <Route path="/statistics" element={<ProtectedRoute><Statistics /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
