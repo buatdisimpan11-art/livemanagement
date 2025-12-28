@@ -61,43 +61,69 @@ export default function Optimize() {
     setAccounts(data || []);
   };
 
+  const parseCSVLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
   const handleCSVUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
       const text = await file.text();
-      const lines = text.split('\n').filter(line => line.trim());
+      // Remove BOM if present
+      const cleanText = text.replace(/^\uFEFF/, '');
+      const lines = cleanText.split('\n').filter(line => line.trim());
       
       if (lines.length < 2) {
         toast.error('File CSV kosong atau tidak valid');
         return;
       }
 
-      // Parse header - look for product name and sales columns
-      const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
-      const nameIdx = headers.findIndex(h => 
-        h.includes('product') || h.includes('nama') || h.includes('name') || h.includes('produk')
-      );
-      const salesIdx = headers.findIndex(h => 
-        h.includes('sales') || h.includes('penjualan') || h.includes('sold') || h.includes('terjual')
-      );
+      // Parse header - look for specific columns from Shopee export
+      const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/"/g, ''));
+      
+      // Look for "Produk" column (product name)
+      const nameIdx = headers.findIndex(h => h === 'produk');
+      
+      // Look for "Produk Terjual(Pesanan Dibuat)" column (products sold)
+      const salesIdx = headers.findIndex(h => h.includes('produk terjual') && h.includes('pesanan dibuat'));
 
       if (nameIdx === -1) {
-        toast.error('Kolom nama produk tidak ditemukan');
+        toast.error('Kolom "Produk" tidak ditemukan');
+        return;
+      }
+
+      if (salesIdx === -1) {
+        toast.error('Kolom "Produk Terjual(Pesanan Dibuat)" tidak ditemukan');
         return;
       }
 
       const products: CSVProduct[] = [];
       for (let i = 1; i < lines.length; i++) {
-        // Handle CSV with potential commas in quoted values
-        const values = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g)?.map(v => v.replace(/"/g, '').trim()) || [];
-        const productName = values[nameIdx];
+        const values = parseCSVLine(lines[i]);
+        const productName = values[nameIdx]?.replace(/"/g, '').trim();
         if (productName) {
-          const salesValue = salesIdx !== -1 ? values[salesIdx] : '0';
+          const salesValue = values[salesIdx] || '0';
           products.push({
             product_name: productName,
-            sales: parseInt(salesValue?.replace(/[^0-9]/g, '') || '0', 10),
+            sales: parseInt(salesValue.replace(/[^0-9]/g, '') || '0', 10),
             rowIndex: i,
           });
         }
@@ -391,7 +417,7 @@ export default function Optimize() {
                     <TableRow>
                       <TableHead>No</TableHead>
                       <TableHead>Nama Produk</TableHead>
-                      <TableHead className="text-right">Penjualan</TableHead>
+                      <TableHead className="text-right">Produk Terjual</TableHead>
                       <TableHead>Status</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -404,7 +430,7 @@ export default function Optimize() {
                           <TableRow key={idx} className={isBottomFive ? 'bg-destructive/5' : ''}>
                             <TableCell>{idx + 1}</TableCell>
                             <TableCell className="font-medium">{product.product_name}</TableCell>
-                            <TableCell className="text-right">Rp {product.sales.toLocaleString('id-ID')}</TableCell>
+                            <TableCell className="text-right">{product.sales.toLocaleString('id-ID')} pcs</TableCell>
                             <TableCell>
                               {isBottomFive ? (
                                 <span className="inline-flex items-center gap-1 text-destructive text-sm">
