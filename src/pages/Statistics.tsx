@@ -6,10 +6,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BarChart3, TrendingUp, MousePointer, ShoppingCart, Package, Eye, Calendar } from 'lucide-react';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, parseISO, isWithinInterval } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { BarChart3, TrendingUp, MousePointer, ShoppingCart, Package, Eye, CalendarIcon } from 'lucide-react';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, parseISO, isWithinInterval, subDays } from 'date-fns';
 import { id } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 import type { Tables } from '@/integrations/supabase/types';
+import type { DateRange } from 'react-day-picker';
 
 type Studio = Tables<'studios'>;
 type ShopeeAccount = Tables<'shopee_accounts'>;
@@ -42,7 +47,8 @@ export default function Statistics() {
   const [selectedAccount, setSelectedAccount] = useState('');
   const [statistics, setStatistics] = useState<ProductStatistic[]>([]);
   const [loading, setLoading] = useState(false);
-  const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'year'>('day');
+  const [period, setPeriod] = useState<'day' | 'yesterday' | 'week' | 'month' | 'year' | 'custom'>('day');
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   useEffect(() => {
     if (user) fetchStudios();
@@ -100,8 +106,13 @@ export default function Statistics() {
 
     switch (period) {
       case 'day':
-        startDate = new Date(now.setHours(0, 0, 0, 0));
-        endDate = new Date(now.setHours(23, 59, 59, 999));
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+        endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+        break;
+      case 'yesterday':
+        const yesterday = subDays(now, 1);
+        startDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 0, 0, 0);
+        endDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59);
         break;
       case 'week':
         startDate = startOfWeek(now, { weekStartsOn: 1 });
@@ -114,6 +125,15 @@ export default function Statistics() {
       case 'year':
         startDate = startOfYear(now);
         endDate = endOfYear(now);
+        break;
+      case 'custom':
+        if (dateRange?.from && dateRange?.to) {
+          startDate = new Date(dateRange.from.getFullYear(), dateRange.from.getMonth(), dateRange.from.getDate(), 0, 0, 0);
+          endDate = new Date(dateRange.to.getFullYear(), dateRange.to.getMonth(), dateRange.to.getDate(), 23, 59, 59);
+        } else {
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+        }
         break;
     }
 
@@ -132,7 +152,7 @@ export default function Statistics() {
       productCount: filteredStats.length,
       uploadDates: uniqueDates,
     };
-  }, [statistics, period]);
+  }, [statistics, period, dateRange]);
 
   const groupedByDate = useMemo(() => {
     const groups: Record<string, ProductStatistic[]> = {};
@@ -167,7 +187,7 @@ export default function Statistics() {
         {/* Filter */}
         <Card>
           <CardContent className="pt-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Studio</label>
                 <Select value={selectedStudio} onValueChange={setSelectedStudio}>
@@ -206,12 +226,55 @@ export default function Statistics() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="day">Hari Ini</SelectItem>
+                    <SelectItem value="yesterday">Kemarin</SelectItem>
                     <SelectItem value="week">Minggu Ini</SelectItem>
                     <SelectItem value="month">Bulan Ini</SelectItem>
                     <SelectItem value="year">Tahun Ini</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+              {period === 'custom' && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Rentang Tanggal</label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !dateRange && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateRange?.from ? (
+                          dateRange.to ? (
+                            <>
+                              {format(dateRange.from, "dd MMM", { locale: id })} -{" "}
+                              {format(dateRange.to, "dd MMM yyyy", { locale: id })}
+                            </>
+                          ) : (
+                            format(dateRange.from, "dd MMM yyyy", { locale: id })
+                          )
+                        ) : (
+                          <span>Pilih tanggal</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        initialFocus
+                        mode="range"
+                        defaultMonth={dateRange?.from}
+                        selected={dateRange}
+                        onSelect={setDateRange}
+                        numberOfMonths={2}
+                        locale={id}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -280,7 +343,7 @@ export default function Statistics() {
             {/* Upload dates info */}
             {aggregatedStats.uploadDates.length > 0 && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Calendar className="w-4 h-4" />
+                <CalendarIcon className="w-4 h-4" />
                 <span>Data tersedia: {aggregatedStats.uploadDates.map(d => format(parseISO(d), 'dd MMM yyyy', { locale: id })).join(', ')}</span>
               </div>
             )}

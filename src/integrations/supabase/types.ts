@@ -103,6 +103,7 @@ export type Database = {
       }
       product_master: {
         Row: {
+          account_id: string | null
           affiliate_link: string | null
           category: string | null
           created_at: string | null
@@ -111,6 +112,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          account_id?: string | null
           affiliate_link?: string | null
           category?: string | null
           created_at?: string | null
@@ -119,6 +121,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          account_id?: string | null
           affiliate_link?: string | null
           category?: string | null
           created_at?: string | null
@@ -126,7 +129,15 @@ export type Database = {
           product_name?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "product_master_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "shopee_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       product_statistics: {
         Row: {
