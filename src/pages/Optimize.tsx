@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Zap, Upload, Download, FileSpreadsheet, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import { Zap, Upload, Download, FileSpreadsheet, CheckCircle2, XCircle, AlertTriangle, MousePointer, ShoppingCart, TrendingUp, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Tables } from '@/integrations/supabase/types';
 
@@ -19,6 +19,16 @@ interface CSVProduct {
   product_name: string;
   sales: number;
   rowIndex: number;
+  ranking?: number;
+  clicks?: number;
+  addToCart?: number;
+  ordersCreated?: number;
+  ordersShipped?: number;
+  productsSoldCreated?: number;
+  productsSoldShipped?: number;
+  gmvCreated?: number;
+  gmvShipped?: number;
+  dataDate?: string;
 }
 
 interface RecommendedProduct {
@@ -99,11 +109,18 @@ export default function Optimize() {
       // Parse header - look for specific columns from Shopee export
       const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/"/g, ''));
       
-      // Look for "Produk" column (product name)
+      // Column indices
+      const dateIdx = headers.findIndex(h => h.includes('periode data'));
+      const rankingIdx = headers.findIndex(h => h === 'ranking');
       const nameIdx = headers.findIndex(h => h === 'produk');
-      
-      // Look for "Produk Terjual(Pesanan Dibuat)" column (products sold)
+      const clicksIdx = headers.findIndex(h => h.includes('klik produk'));
+      const cartIdx = headers.findIndex(h => h.includes('tambah ke keranjang'));
+      const ordersCreatedIdx = headers.findIndex(h => h === 'pesanan(pesanan dibuat)');
+      const ordersShippedIdx = headers.findIndex(h => h === 'pesanan(pesanan siap dikirim)');
       const salesIdx = headers.findIndex(h => h.includes('produk terjual') && h.includes('pesanan dibuat'));
+      const salesShippedIdx = headers.findIndex(h => h.includes('produk terjual') && h.includes('siap dikirim'));
+      const gmvCreatedIdx = headers.findIndex(h => h.includes('penjualan') && h.includes('pesanan dibuat'));
+      const gmvShippedIdx = headers.findIndex(h => h.includes('penjualan') && h.includes('siap dikirim'));
 
       if (nameIdx === -1) {
         toast.error('Kolom "Produk" tidak ditemukan');
@@ -115,6 +132,19 @@ export default function Optimize() {
         return;
       }
 
+      const parseRupiah = (value: string): number => {
+        return parseFloat(value.replace(/[Rp.,\s]/g, '').replace(/,/g, '.')) || 0;
+      };
+
+      const parseDate = (value: string): string => {
+        // Parse DD-MM-YYYY format
+        const parts = value.split('-');
+        if (parts.length === 3) {
+          return `${parts[2]}-${parts[1]}-${parts[0]}`; // Convert to YYYY-MM-DD
+        }
+        return value;
+      };
+
       const products: CSVProduct[] = [];
       for (let i = 1; i < lines.length; i++) {
         const values = parseCSVLine(lines[i]);
@@ -125,6 +155,16 @@ export default function Optimize() {
             product_name: productName,
             sales: parseInt(salesValue.replace(/[^0-9]/g, '') || '0', 10),
             rowIndex: i,
+            ranking: rankingIdx !== -1 ? parseInt(values[rankingIdx] || '0', 10) : i,
+            clicks: clicksIdx !== -1 ? parseInt(values[clicksIdx]?.replace(/[^0-9]/g, '') || '0', 10) : 0,
+            addToCart: cartIdx !== -1 ? parseInt(values[cartIdx]?.replace(/[^0-9]/g, '') || '0', 10) : 0,
+            ordersCreated: ordersCreatedIdx !== -1 ? parseInt(values[ordersCreatedIdx]?.replace(/[^0-9]/g, '') || '0', 10) : 0,
+            ordersShipped: ordersShippedIdx !== -1 ? parseInt(values[ordersShippedIdx]?.replace(/[^0-9]/g, '') || '0', 10) : 0,
+            productsSoldCreated: parseInt(salesValue.replace(/[^0-9]/g, '') || '0', 10),
+            productsSoldShipped: salesShippedIdx !== -1 ? parseInt(values[salesShippedIdx]?.replace(/[^0-9]/g, '') || '0', 10) : 0,
+            gmvCreated: gmvCreatedIdx !== -1 ? parseRupiah(values[gmvCreatedIdx] || '0') : 0,
+            gmvShipped: gmvShippedIdx !== -1 ? parseRupiah(values[gmvShippedIdx] || '0') : 0,
+            dataDate: dateIdx !== -1 ? parseDate(values[dateIdx] || '') : new Date().toISOString().split('T')[0],
           });
         }
       }
@@ -240,6 +280,38 @@ export default function Optimize() {
         products_removed: productsToRemove.length,
         products_added: replacements.length,
       });
+
+      // Save CSV data to product_statistics for tracking
+      const dataDate = csvProducts[0]?.dataDate || new Date().toISOString().split('T')[0];
+      
+      // Delete existing data for this date and account to avoid duplicates
+      await supabase
+        .from('product_statistics')
+        .delete()
+        .eq('account_id', selectedAccount)
+        .eq('data_date', dataDate);
+
+      // Insert all products statistics
+      const statisticsData = csvProducts.map(p => ({
+        user_id: user.id,
+        account_id: selectedAccount,
+        studio_id: selectedStudio,
+        data_date: p.dataDate || dataDate,
+        ranking: p.ranking || null,
+        product_name: p.product_name,
+        clicks: p.clicks || 0,
+        add_to_cart: p.addToCart || 0,
+        orders_created: p.ordersCreated || 0,
+        orders_shipped: p.ordersShipped || 0,
+        products_sold_created: p.productsSoldCreated || 0,
+        products_sold_shipped: p.productsSoldShipped || 0,
+        gmv_created: p.gmvCreated || 0,
+        gmv_shipped: p.gmvShipped || 0,
+      }));
+
+      if (statisticsData.length > 0) {
+        await supabase.from('product_statistics').insert(statisticsData);
+      }
 
       setRecommendations(finalList);
       setStep('result');
@@ -411,13 +483,50 @@ export default function Optimize() {
                 </div>
               </div>
 
+              {/* Summary Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                  <div className="flex items-center gap-2 text-blue-500 mb-1">
+                    <MousePointer className="w-4 h-4" />
+                    <span className="text-xs font-medium">Total Klik</span>
+                  </div>
+                  <p className="text-xl font-bold">{csvProducts.reduce((s, p) => s + (p.clicks || 0), 0).toLocaleString('id-ID')}</p>
+                </div>
+                <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                  <div className="flex items-center gap-2 text-orange-500 mb-1">
+                    <ShoppingCart className="w-4 h-4" />
+                    <span className="text-xs font-medium">Masuk Keranjang</span>
+                  </div>
+                  <p className="text-xl font-bold">{csvProducts.reduce((s, p) => s + (p.addToCart || 0), 0).toLocaleString('id-ID')}</p>
+                </div>
+                <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
+                  <div className="flex items-center gap-2 text-green-500 mb-1">
+                    <Package className="w-4 h-4" />
+                    <span className="text-xs font-medium">Produk Terjual</span>
+                  </div>
+                  <p className="text-xl font-bold">{csvProducts.reduce((s, p) => s + (p.productsSoldCreated || 0), 0).toLocaleString('id-ID')}</p>
+                </div>
+                <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                  <div className="flex items-center gap-2 text-purple-500 mb-1">
+                    <TrendingUp className="w-4 h-4" />
+                    <span className="text-xs font-medium">GMV</span>
+                  </div>
+                  <p className="text-xl font-bold">
+                    {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(csvProducts.reduce((s, p) => s + (p.gmvCreated || 0), 0))}
+                  </p>
+                </div>
+              </div>
+
               <div className="max-h-[400px] overflow-auto border rounded-lg">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>No</TableHead>
+                      <TableHead className="w-12">No</TableHead>
                       <TableHead>Nama Produk</TableHead>
-                      <TableHead className="text-right">Produk Terjual</TableHead>
+                      <TableHead className="text-right">Klik</TableHead>
+                      <TableHead className="text-right">Keranjang</TableHead>
+                      <TableHead className="text-right">Terjual</TableHead>
+                      <TableHead className="text-right">GMV</TableHead>
                       <TableHead>Status</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -429,16 +538,21 @@ export default function Optimize() {
                         return (
                           <TableRow key={idx} className={isBottomFive ? 'bg-destructive/5' : ''}>
                             <TableCell>{idx + 1}</TableCell>
-                            <TableCell className="font-medium">{product.product_name}</TableCell>
-                            <TableCell className="text-right">{product.sales.toLocaleString('id-ID')} pcs</TableCell>
+                            <TableCell className="font-medium max-w-[250px] truncate" title={product.product_name}>{product.product_name}</TableCell>
+                            <TableCell className="text-right">{(product.clicks || 0).toLocaleString('id-ID')}</TableCell>
+                            <TableCell className="text-right">{(product.addToCart || 0).toLocaleString('id-ID')}</TableCell>
+                            <TableCell className="text-right">{(product.productsSoldCreated || 0).toLocaleString('id-ID')}</TableCell>
+                            <TableCell className="text-right text-xs">
+                              {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(product.gmvCreated || 0)}
+                            </TableCell>
                             <TableCell>
                               {isBottomFive ? (
                                 <span className="inline-flex items-center gap-1 text-destructive text-sm">
-                                  <XCircle className="w-4 h-4" /> Akan diganti
+                                  <XCircle className="w-4 h-4" /> Ganti
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 text-success text-sm">
-                                  <CheckCircle2 className="w-4 h-4" /> Dipertahankan
+                                  <CheckCircle2 className="w-4 h-4" /> OK
                                 </span>
                               )}
                             </TableCell>
