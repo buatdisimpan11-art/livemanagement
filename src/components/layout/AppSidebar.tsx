@@ -29,6 +29,7 @@ const mitraMenuItems = [
 
 const adminMenuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
+  { icon: Users, label: 'Kelola Mitra', path: '/admin/mitra' },
   { icon: Settings, label: 'Pengaturan', path: '/settings' },
 ];
 
