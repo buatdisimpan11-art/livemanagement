@@ -72,10 +72,10 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       boxShadow: {
-        "glow": "var(--shadow-glow)",
+        glow: "var(--shadow-glow)",
         "accent-glow": "var(--shadow-accent-glow)",
-        "soft": "0 2px 8px -2px hsl(var(--foreground) / 0.08)",
-        "elevated": "0 8px 30px -10px hsl(var(--foreground) / 0.15)",
+        soft: "0 2px 8px -2px hsl(var(--foreground) / 0.08)",
+        elevated: "0 8px 30px -10px hsl(var(--foreground) / 0.15)",
       },
       keyframes: {
         "accordion-down": {
