@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { BarChart3, TrendingUp, MousePointer, ShoppingCart, Package, Eye, CalendarIcon } from 'lucide-react';
+import { BarChart3, TrendingUp, MousePointer, ShoppingCart, Package, Eye, CalendarIcon, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, parseISO, isWithinInterval, subDays } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -49,6 +49,8 @@ export default function Statistics() {
   const [loading, setLoading] = useState(false);
   const [period, setPeriod] = useState<'day' | 'yesterday' | 'week' | 'month' | 'year' | 'custom'>('day');
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [sortColumn, setSortColumn] = useState<'ranking' | 'clicks' | 'add_to_cart' | 'products_sold_created' | 'gmv_created'>('ranking');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => {
     if (user) fetchStudios();
@@ -171,6 +173,39 @@ export default function Statistics() {
     });
     return groups;
   }, [statistics]);
+
+  const handleSort = (column: typeof sortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('desc');
+    }
+  };
+
+  const getSortedProducts = (products: ProductStatistic[]) => {
+    return [...products].sort((a, b) => {
+      const aVal = Number(a[sortColumn]) || 0;
+      const bVal = Number(b[sortColumn]) || 0;
+      return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+    });
+  };
+
+  const SortableHeader = ({ column, label, className }: { column: typeof sortColumn; label: string; className?: string }) => (
+    <TableHead 
+      className={cn("cursor-pointer hover:bg-muted/50 transition-colors select-none", className)}
+      onClick={() => handleSort(column)}
+    >
+      <div className="flex items-center justify-end gap-1">
+        {label}
+        {sortColumn === column ? (
+          sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />
+        ) : (
+          <ArrowUpDown className="w-4 h-4 opacity-40" />
+        )}
+      </div>
+    </TableHead>
+  );
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -393,16 +428,16 @@ export default function Statistics() {
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                <TableHead className="w-16">Rank</TableHead>
+                                <SortableHeader column="ranking" label="Rank" className="w-16 text-left" />
                                 <TableHead>Nama Produk</TableHead>
-                                <TableHead className="text-right">Klik</TableHead>
-                                <TableHead className="text-right">Keranjang</TableHead>
-                                <TableHead className="text-right">Terjual</TableHead>
-                                <TableHead className="text-right">GMV</TableHead>
+                                <SortableHeader column="clicks" label="Klik" />
+                                <SortableHeader column="add_to_cart" label="Keranjang" />
+                                <SortableHeader column="products_sold_created" label="Terjual" />
+                                <SortableHeader column="gmv_created" label="GMV" />
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {products.map((product) => (
+                              {getSortedProducts(products).map((product) => (
                                 <TableRow key={product.id}>
                                   <TableCell className="font-medium">{product.ranking || '-'}</TableCell>
                                   <TableCell className="max-w-[300px] truncate" title={product.product_name}>
