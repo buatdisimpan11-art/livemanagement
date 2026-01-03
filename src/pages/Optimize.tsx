@@ -17,9 +17,10 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Tables } from '@/integrations/supabase/types';
+import { useGlobalSelection } from '@/hooks/useGlobalSelection';
+import { useStudiosQuery } from '@/hooks/useStudiosQuery';
+import { useAccountsQuery } from '@/hooks/useAccountsQuery';
 
-type Studio = Tables<'studios'>;
-type ShopeeAccount = Tables<'shopee_accounts'>;
 type Product = Tables<'product_master'>;
 
 interface CSVProduct {
@@ -48,10 +49,10 @@ interface RecommendedProduct {
 
 export default function Optimize() {
   const { user } = useAuth();
-  const [studios, setStudios] = useState<Studio[]>([]);
-  const [accounts, setAccounts] = useState<ShopeeAccount[]>([]);
-  const [selectedStudio, setSelectedStudio] = useState('');
-  const [selectedAccount, setSelectedAccount] = useState('');
+  const { selectedStudio, setSelectedStudio, selectedAccount, setSelectedAccount } = useGlobalSelection();
+  const { data: studios = [], isLoading: studiosLoading } = useStudiosQuery();
+  const { data: accounts = [], isLoading: accountsLoading } = useAccountsQuery(selectedStudio);
+  
   const [csvProducts, setCsvProducts] = useState<CSVProduct[]>([]);
   const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
   const [selectedReplacements, setSelectedReplacements] = useState<Set<string>>(new Set());
@@ -60,35 +61,31 @@ export default function Optimize() {
   const [step, setStep] = useState<'select' | 'upload' | 'choose' | 'result'>('select');
   const [activeTab, setActiveTab] = useState<'manual' | 'auto'>('auto');
 
+  // Auto-select first studio when studios load
   useEffect(() => {
-    if (user) fetchStudios();
-  }, [user]);
+    if (studios.length > 0 && !selectedStudio) {
+      setSelectedStudio(studios[0].id);
+    }
+  }, [studios, selectedStudio, setSelectedStudio]);
 
+  // Auto-select first account when accounts load
   useEffect(() => {
-    if (selectedStudio) {
-      fetchAccounts(selectedStudio);
+    if (accounts.length > 0 && !selectedAccount) {
+      setSelectedAccount(accounts[0].id);
     }
-  }, [selectedStudio]);
+  }, [accounts, selectedAccount, setSelectedAccount]);
 
-  const fetchStudios = async () => {
-    if (!user) return;
-    const { data } = await supabase.from('studios').select('*').eq('user_id', user.id).order('name');
-    setStudios(data || []);
-    // Auto-select first studio
-    if (data && data.length > 0 && !selectedStudio) {
-      setSelectedStudio(data[0].id);
+  // Clear account when studio changes if account doesn't belong to new studio
+  useEffect(() => {
+    if (selectedAccount && accounts.length > 0) {
+      const accountExists = accounts.some(a => a.id === selectedAccount);
+      if (!accountExists) {
+        setSelectedAccount(accounts[0].id);
+      }
+    } else if (accounts.length === 0 && selectedAccount) {
+      setSelectedAccount('');
     }
-  };
-
-  const fetchAccounts = async (studioId: string) => {
-    if (!user) return;
-    const { data } = await supabase.from('shopee_accounts').select('*').eq('studio_id', studioId).order('name');
-    setAccounts(data || []);
-    // Auto-select first account
-    if (data && data.length > 0) {
-      setSelectedAccount(data[0].id);
-    }
-  };
+  }, [accounts, selectedAccount, setSelectedAccount]);
 
   const parseCSVLine = (line: string): string[] => {
     const result: string[] = [];
@@ -417,7 +414,7 @@ export default function Optimize() {
                 <Label>Studio</Label>
                 <Select value={selectedStudio} onValueChange={setSelectedStudio}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Pilih studio" />
+                    <SelectValue placeholder={studiosLoading ? "Memuat..." : "Pilih studio"} />
                   </SelectTrigger>
                   <SelectContent>
                     {studios.map((studio) => (
@@ -432,7 +429,7 @@ export default function Optimize() {
                 <Label>Akun Shopee</Label>
                 <Select value={selectedAccount} onValueChange={setSelectedAccount} disabled={!selectedStudio}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Pilih akun" />
+                    <SelectValue placeholder={accountsLoading ? "Memuat..." : "Pilih akun"} />
                   </SelectTrigger>
                   <SelectContent>
                     {accounts.map((account) => (
@@ -445,7 +442,7 @@ export default function Optimize() {
               </div>
             </div>
 
-            {studios.length === 0 && (
+            {studios.length === 0 && !studiosLoading && (
               <div className="p-8 text-center">
                 <AlertTriangle className="w-12 h-12 mx-auto text-warning mb-4" />
                 <p className="text-muted-foreground">Anda perlu membuat studio dan akun terlebih dahulu</p>
@@ -477,325 +474,231 @@ export default function Optimize() {
                 studioId={selectedStudio}
                 accountId={selectedAccount}
                 accountName={selectedAccountName || ''}
-                onOptimizeComplete={() => {
-                  toast.success('Optimasi selesai!');
-                }}
+                onOptimizeComplete={() => {}}
               />
             </TabsContent>
 
-            {/* Manual Mode - CSV Upload */}
+            {/* Manual Mode - CSV Upload Flow */}
             <TabsContent value="manual" className="space-y-6">
-              {/* Steps indicator */}
-              <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-xl overflow-x-auto">
-                <div className={`flex items-center gap-2 shrink-0 ${step === 'select' ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step === 'select' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>1</div>
-                  <span className="hidden sm:inline">Upload CSV</span>
-                </div>
-                <div className="h-px flex-1 bg-border min-w-4" />
-                <div className={`flex items-center gap-2 shrink-0 ${step === 'upload' ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step === 'upload' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>2</div>
-                  <span className="hidden sm:inline">Pilih Diganti</span>
-                </div>
-                <div className="h-px flex-1 bg-border min-w-4" />
-                <div className={`flex items-center gap-2 shrink-0 ${step === 'choose' ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step === 'choose' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>3</div>
-                  <span className="hidden sm:inline">Pilih Pengganti</span>
-                </div>
-                <div className="h-px flex-1 bg-border min-w-4" />
-                <div className={`flex items-center gap-2 shrink-0 ${step === 'result' ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step === 'result' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>4</div>
-                  <span className="hidden sm:inline">Hasil</span>
-                </div>
-              </div>
-
-              {/* Step 1: Upload CSV */}
               {step === 'select' && (
                 <Card>
-                  <CardContent className="p-8">
-                    <div className="border-2 border-dashed border-muted-foreground/25 rounded-xl p-8 text-center">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Upload className="w-5 h-5" />
+                      Upload CSV Performa Shopee
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-12 text-center">
                       <FileSpreadsheet className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                      <h3 className="text-lg font-semibold mb-2">Upload Laporan Live Shopee</h3>
-                      <p className="text-muted-foreground mb-4">File CSV dengan data produk dan penjualan</p>
-                      <Label htmlFor="csv-optimize" className="cursor-pointer">
-                        <Button variant="gradient" asChild>
-                          <span>
-                            <Upload className="w-5 h-5" />
-                            Pilih File CSV
-                          </span>
-                        </Button>
-                        <input 
-                          id="csv-optimize"
-                          type="file" 
-                          accept=".csv" 
+                      <p className="text-lg font-medium mb-2">Upload file CSV dari Shopee Affiliate</p>
+                      <p className="text-muted-foreground mb-6">
+                        File harus memiliki kolom "Produk" dan "Produk Terjual(Pesanan Dibuat)"
+                      </p>
+                      <label>
+                        <input
+                          type="file"
+                          accept=".csv"
                           onChange={handleCSVUpload}
                           className="hidden"
                         />
-                      </Label>
+                        <Button variant="gradient" className="cursor-pointer" asChild>
+                          <span>
+                            <Upload className="w-5 h-5 mr-2" />
+                            Pilih File CSV
+                          </span>
+                        </Button>
+                      </label>
                     </div>
                   </CardContent>
                 </Card>
               )}
 
-              {/* Step 2: Select products to remove */}
               {step === 'upload' && (
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center justify-between">
-                      <span>Pilih Produk yang Akan Diganti - {selectedAccountName}</span>
-                      <span className="text-sm font-normal text-muted-foreground">{selectedToRemoveCount} dipilih</span>
-                    </CardTitle>
+                    <CardTitle>Pilih Produk yang Akan Diganti</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="p-4 bg-primary/10 border border-primary/20 rounded-lg flex items-start gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
                       <div>
-                        <p className="font-medium">Centang produk yang ingin diganti</p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Pilih produk dengan performa rendah yang ingin Anda ganti dengan produk baru dari gudang
+                        <p className="font-medium">{csvProducts.length} produk ditemukan</p>
+                        <p className="text-sm text-muted-foreground">
+                          {selectedToRemoveCount} produk dipilih untuk diganti
                         </p>
                       </div>
+                      <Button 
+                        variant="gradient" 
+                        onClick={proceedToChooseReplacements}
+                        disabled={selectedToRemoveCount === 0}
+                      >
+                        Lanjut Pilih Pengganti
+                        <ArrowRight className="w-4 h-4 ml-2" />
+                      </Button>
                     </div>
 
-                    {/* Summary Stats */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                        <div className="flex items-center gap-2 text-blue-500 mb-1">
-                          <MousePointer className="w-4 h-4" />
-                          <span className="text-xs font-medium">Total Klik</span>
-                        </div>
-                        <p className="text-xl font-bold">{csvProducts.reduce((s, p) => s + (p.clicks || 0), 0).toLocaleString('id-ID')}</p>
-                      </div>
-                      <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg">
-                        <div className="flex items-center gap-2 text-orange-500 mb-1">
-                          <ShoppingCart className="w-4 h-4" />
-                          <span className="text-xs font-medium">Masuk Keranjang</span>
-                        </div>
-                        <p className="text-xl font-bold">{csvProducts.reduce((s, p) => s + (p.addToCart || 0), 0).toLocaleString('id-ID')}</p>
-                      </div>
-                      <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
-                        <div className="flex items-center gap-2 text-green-500 mb-1">
-                          <Package className="w-4 h-4" />
-                          <span className="text-xs font-medium">Produk Terjual</span>
-                        </div>
-                        <p className="text-xl font-bold">{csvProducts.reduce((s, p) => s + (p.productsSoldCreated || 0), 0).toLocaleString('id-ID')}</p>
-                      </div>
-                      <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-lg">
-                        <div className="flex items-center gap-2 text-purple-500 mb-1">
-                          <TrendingUp className="w-4 h-4" />
-                          <span className="text-xs font-medium">GMV</span>
-                        </div>
-                        <p className="text-xl font-bold">
-                          {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(csvProducts.reduce((s, p) => s + (p.gmvCreated || 0), 0))}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="max-h-[400px] overflow-auto border rounded-lg">
+                    <div className="rounded-md border overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="w-12">Ganti</TableHead>
-                            <TableHead className="w-12">No</TableHead>
+                            <TableHead className="w-12"></TableHead>
+                            <TableHead className="w-16">Rank</TableHead>
                             <TableHead>Nama Produk</TableHead>
                             <TableHead className="text-right">Klik</TableHead>
                             <TableHead className="text-right">Keranjang</TableHead>
                             <TableHead className="text-right">Terjual</TableHead>
-                            <TableHead className="text-right">GMV</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {[...csvProducts]
-                            .sort((a, b) => a.sales - b.sales)
-                            .map((product, idx) => (
-                              <TableRow key={product.rowIndex} className={product.selected ? 'bg-destructive/10' : ''}>
-                                <TableCell>
-                                  <Checkbox
-                                    checked={product.selected}
-                                    onCheckedChange={() => toggleProductSelection(product.rowIndex)}
-                                  />
-                                </TableCell>
-                                <TableCell>{idx + 1}</TableCell>
-                                <TableCell className="font-medium max-w-[250px] truncate" title={product.product_name}>{product.product_name}</TableCell>
-                                <TableCell className="text-right">{(product.clicks || 0).toLocaleString('id-ID')}</TableCell>
-                                <TableCell className="text-right">{(product.addToCart || 0).toLocaleString('id-ID')}</TableCell>
-                                <TableCell className="text-right">{(product.productsSoldCreated || 0).toLocaleString('id-ID')}</TableCell>
-                                <TableCell className="text-right text-xs">
-                                  {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(product.gmvCreated || 0)}
-                                </TableCell>
-                              </TableRow>
-                            ))}
+                          {csvProducts.map((product) => (
+                            <TableRow 
+                              key={product.rowIndex}
+                              className={product.selected ? 'bg-destructive/10' : ''}
+                            >
+                              <TableCell>
+                                <Checkbox
+                                  checked={product.selected}
+                                  onCheckedChange={() => toggleProductSelection(product.rowIndex)}
+                                />
+                              </TableCell>
+                              <TableCell className="font-medium">{product.ranking}</TableCell>
+                              <TableCell className="max-w-[300px] truncate">
+                                {product.product_name}
+                              </TableCell>
+                              <TableCell className="text-right">{product.clicks?.toLocaleString('id-ID')}</TableCell>
+                              <TableCell className="text-right">{product.addToCart?.toLocaleString('id-ID')}</TableCell>
+                              <TableCell className="text-right">{product.sales.toLocaleString('id-ID')}</TableCell>
+                            </TableRow>
+                          ))}
                         </TableBody>
                       </Table>
-                    </div>
-
-                    <div className="flex justify-end gap-3">
-                      <Button variant="outline" onClick={resetFlow}>Batal</Button>
-                      <Button variant="gradient" onClick={proceedToChooseReplacements} disabled={selectedToRemoveCount === 0}>
-                        <ArrowRight className="w-5 h-5" />
-                        Pilih Pengganti ({selectedToRemoveCount})
-                      </Button>
                     </div>
                   </CardContent>
                 </Card>
               )}
 
-              {/* Step 3: Choose replacement products */}
               {step === 'choose' && (
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center justify-between">
-                      <span>Pilih Produk Pengganti dari Gudang</span>
-                      <span className="text-sm font-normal text-muted-foreground">{selectedReplacements.size} dipilih</span>
-                    </CardTitle>
+                    <CardTitle>Pilih Produk Pengganti dari Gudang</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="p-4 bg-warning/10 border border-warning/20 rounded-lg flex items-start gap-3">
-                      <AlertTriangle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
                       <div>
-                        <p className="font-medium text-warning">Pilih produk pengganti dari gudang akun ini</p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Anda akan mengganti {selectedToRemoveCount} produk. Produk yang dipilih akan dihapus dari gudang setelah digunakan.
+                        <p className="font-medium">{availableProducts.length} produk tersedia di gudang</p>
+                        <p className="text-sm text-muted-foreground">
+                          {selectedReplacements.size} produk dipilih sebagai pengganti
                         </p>
                       </div>
+                      <Button 
+                        variant="gradient" 
+                        onClick={generateRecommendations}
+                        disabled={processing || selectedReplacements.size === 0}
+                      >
+                        {processing ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                            Memproses...
+                          </>
+                        ) : (
+                          <>
+                            <Zap className="w-4 h-4 mr-2" />
+                            Generate Rekomendasi
+                          </>
+                        )}
+                      </Button>
                     </div>
 
                     {availableProducts.length === 0 ? (
-                      <div className="p-12 text-center">
-                        <Package className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
-                        <h3 className="text-xl font-semibold mb-2">Gudang Kosong</h3>
-                        <p className="text-muted-foreground mb-6">Tidak ada produk di gudang untuk akun ini. Tambah produk ke gudang terlebih dahulu.</p>
-                        <Button variant="outline" asChild>
-                          <a href="/products">Ke Gudang Produk</a>
-                        </Button>
+                      <div className="p-8 text-center text-muted-foreground">
+                        <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                        <p>Tidak ada produk tersedia di gudang</p>
+                        <p className="text-sm mt-1">Tambah produk ke gudang terlebih dahulu</p>
                       </div>
                     ) : (
-                      <>
-                        <div className="max-h-[400px] overflow-auto border rounded-lg">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="w-12">Pilih</TableHead>
-                                <TableHead>Nama Produk</TableHead>
-                                <TableHead>Kategori</TableHead>
-                                <TableHead>Link</TableHead>
+                      <div className="rounded-md border overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-12"></TableHead>
+                              <TableHead>Nama Produk</TableHead>
+                              <TableHead>Kategori</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {availableProducts.map((product) => (
+                              <TableRow 
+                                key={product.id}
+                                className={selectedReplacements.has(product.id) ? 'bg-success/10' : ''}
+                              >
+                                <TableCell>
+                                  <Checkbox
+                                    checked={selectedReplacements.has(product.id)}
+                                    onCheckedChange={() => toggleReplacementSelection(product.id)}
+                                  />
+                                </TableCell>
+                                <TableCell className="font-medium">{product.product_name}</TableCell>
+                                <TableCell className="text-muted-foreground">{product.category || '-'}</TableCell>
                               </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {availableProducts.map((product) => (
-                                <TableRow key={product.id} className={selectedReplacements.has(product.id) ? 'bg-success/10' : ''}>
-                                  <TableCell>
-                                    <Checkbox
-                                      checked={selectedReplacements.has(product.id)}
-                                      onCheckedChange={() => toggleReplacementSelection(product.id)}
-                                    />
-                                  </TableCell>
-                                  <TableCell className="font-medium">{product.product_name}</TableCell>
-                                  <TableCell className="text-muted-foreground">{product.category || '-'}</TableCell>
-                                  <TableCell>
-                                    {product.affiliate_link ? (
-                                      <a 
-                                        href={product.affiliate_link} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
-                                        className="text-primary hover:underline text-sm"
-                                      >
-                                        Link
-                                      </a>
-                                    ) : '-'}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-
-                        <div className="flex justify-between gap-3">
-                          <Button variant="outline" onClick={() => setStep('upload')}>Kembali</Button>
-                          <Button variant="gradient" onClick={generateRecommendations} disabled={processing || selectedReplacements.size === 0}>
-                            {processing ? (
-                              <>
-                                <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
-                                Memproses...
-                              </>
-                            ) : (
-                              <>
-                                <Zap className="w-5 h-5" />
-                                Proses Optimasi
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                      </>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
                     )}
                   </CardContent>
                 </Card>
               )}
 
-              {/* Step 4: Results */}
               {step === 'result' && (
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center justify-between">
-                      <span>Hasil Optimasi - {selectedAccountName}</span>
-                      <Button variant="gradient" onClick={downloadExcel}>
-                        <Download className="w-5 h-5" />
-                        Download Excel
-                      </Button>
+                    <CardTitle className="flex items-center gap-2">
+                      <CheckCircle2 className="w-5 h-5 text-success" />
+                      Hasil Optimasi
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <div className="max-h-[500px] overflow-auto border rounded-lg">
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between p-4 bg-success/10 rounded-lg border border-success/20">
+                      <div>
+                        <p className="font-medium text-success">Optimasi Berhasil!</p>
+                        <p className="text-sm text-muted-foreground">
+                          {recommendations.filter(r => r.isNew).length} produk baru ditambahkan
+                        </p>
+                      </div>
+                      <Button variant="outline" onClick={downloadExcel}>
+                        <Download className="w-4 h-4 mr-2" />
+                        Download CSV
+                      </Button>
+                    </div>
+
+                    <div className="rounded-md border overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>No</TableHead>
+                            <TableHead className="w-12">No</TableHead>
                             <TableHead>Nama Produk</TableHead>
-                            <TableHead>Link Afiliasi</TableHead>
                             <TableHead>Status</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {recommendations.map((product, idx) => (
-                            <TableRow key={idx} className={product.isNew ? 'bg-success/10' : ''}>
-                              <TableCell>{idx + 1}</TableCell>
-                              <TableCell className="font-medium">{product.product_name}</TableCell>
-                              <TableCell>
-                                {product.affiliate_link ? (
-                                  <a 
-                                    href={product.affiliate_link} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="text-primary hover:underline text-sm"
-                                  >
-                                    {product.affiliate_link.slice(0, 40)}...
-                                  </a>
-                                ) : '-'}
-                              </TableCell>
+                            <TableRow key={idx}>
+                              <TableCell className="font-medium">{idx + 1}</TableCell>
+                              <TableCell>{product.product_name}</TableCell>
                               <TableCell>
                                 {product.isNew ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-success/20 text-success rounded-full text-sm font-medium">
-                                    <Zap className="w-3 h-3" /> BARU
+                                  <span className="inline-flex items-center gap-1 text-success">
+                                    <CheckCircle2 className="w-4 h-4" />
+                                    BARU
                                   </span>
                                 ) : (
-                                  <span className="text-muted-foreground text-sm">Existing</span>
+                                  <span className="text-muted-foreground">Existing</span>
                                 )}
                               </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
                       </Table>
-                    </div>
-
-                    <div className="mt-6 p-4 bg-success/10 border border-success/20 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <CheckCircle2 className="w-6 h-6 text-success" />
-                        <div>
-                          <p className="font-medium text-success">Optimasi Berhasil!</p>
-                          <p className="text-sm text-muted-foreground">
-                            {recommendations.filter(r => r.isNew).length} produk baru telah ditambahkan dan dihapus dari gudang.
-                          </p>
-                        </div>
-                      </div>
                     </div>
                   </CardContent>
                 </Card>

@@ -12,34 +12,51 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Package, Plus, Upload, Trash2, Search, ExternalLink, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Tables } from '@/integrations/supabase/types';
+import { useGlobalSelection } from '@/hooks/useGlobalSelection';
+import { useStudiosQuery } from '@/hooks/useStudiosQuery';
+import { useAccountsQuery } from '@/hooks/useAccountsQuery';
 
 type Product = Tables<'product_master'>;
-type Studio = Tables<'studios'>;
-type ShopeeAccount = Tables<'shopee_accounts'>;
 
 export default function Products() {
   const { user } = useAuth();
+  const { selectedStudio, setSelectedStudio, selectedAccount, setSelectedAccount } = useGlobalSelection();
+  const { data: studios = [], isLoading: studiosLoading } = useStudiosQuery();
+  const { data: accounts = [], isLoading: accountsLoading } = useAccountsQuery(selectedStudio);
+  
   const [products, setProducts] = useState<Product[]>([]);
-  const [studios, setStudios] = useState<Studio[]>([]);
-  const [accounts, setAccounts] = useState<ShopeeAccount[]>([]);
-  const [selectedStudio, setSelectedStudio] = useState('');
-  const [selectedAccount, setSelectedAccount] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [formData, setFormData] = useState({ product_name: '', affiliate_link: '', category: '' });
   const [uploading, setUploading] = useState(false);
 
+  // Auto-select first studio when studios load
   useEffect(() => {
-    if (user) fetchStudios();
-  }, [user]);
-
-  useEffect(() => {
-    if (selectedStudio) {
-      fetchAccounts(selectedStudio);
+    if (studios.length > 0 && !selectedStudio) {
+      setSelectedStudio(studios[0].id);
     }
-  }, [selectedStudio]);
+  }, [studios, selectedStudio, setSelectedStudio]);
+
+  // Auto-select first account when accounts load
+  useEffect(() => {
+    if (accounts.length > 0 && !selectedAccount) {
+      setSelectedAccount(accounts[0].id);
+    }
+  }, [accounts, selectedAccount, setSelectedAccount]);
+
+  // Clear account when studio changes if account doesn't belong to new studio
+  useEffect(() => {
+    if (selectedAccount && accounts.length > 0) {
+      const accountExists = accounts.some(a => a.id === selectedAccount);
+      if (!accountExists) {
+        setSelectedAccount(accounts[0].id);
+      }
+    } else if (accounts.length === 0 && selectedAccount) {
+      setSelectedAccount('');
+    }
+  }, [accounts, selectedAccount, setSelectedAccount]);
 
   useEffect(() => {
     if (selectedAccount) {
@@ -48,27 +65,6 @@ export default function Products() {
       setProducts([]);
     }
   }, [selectedAccount]);
-
-  const fetchStudios = async () => {
-    if (!user) return;
-    const { data } = await supabase.from('studios').select('*').eq('user_id', user.id).order('name');
-    setStudios(data || []);
-    // Auto-select first studio
-    if (data && data.length > 0 && !selectedStudio) {
-      setSelectedStudio(data[0].id);
-    }
-    setLoading(false);
-  };
-
-  const fetchAccounts = async (studioId: string) => {
-    if (!user) return;
-    const { data } = await supabase.from('shopee_accounts').select('*').eq('studio_id', studioId).order('name');
-    setAccounts(data || []);
-    // Auto-select first account
-    if (data && data.length > 0) {
-      setSelectedAccount(data[0].id);
-    }
-  };
 
   const fetchProducts = async () => {
     if (!user || !selectedAccount) return;
@@ -201,6 +197,7 @@ export default function Products() {
   );
 
   const selectedAccountName = accounts.find(a => a.id === selectedAccount)?.name;
+  const isInitialLoading = studiosLoading || (selectedStudio && accountsLoading);
 
   return (
     <AppLayout>
@@ -320,7 +317,7 @@ export default function Products() {
                 <Label>Studio</Label>
                 <Select value={selectedStudio} onValueChange={setSelectedStudio}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Pilih studio" />
+                    <SelectValue placeholder={studiosLoading ? "Memuat..." : "Pilih studio"} />
                   </SelectTrigger>
                   <SelectContent>
                     {studios.map((studio) => (
@@ -335,7 +332,7 @@ export default function Products() {
                 <Label>Akun Shopee</Label>
                 <Select value={selectedAccount} onValueChange={setSelectedAccount} disabled={!selectedStudio}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Pilih akun" />
+                    <SelectValue placeholder={accountsLoading ? "Memuat..." : "Pilih akun"} />
                   </SelectTrigger>
                   <SelectContent>
                     {accounts.map((account) => (
@@ -432,8 +429,8 @@ export default function Products() {
                   </Table>
                 )}
                 {filteredProducts.length > 100 && (
-                  <div className="p-4 text-center text-sm text-muted-foreground border-t">
-                    Menampilkan 100 dari {filteredProducts.length} produk
+                  <div className="p-4 text-center text-muted-foreground text-sm border-t">
+                    Menampilkan 100 dari {filteredProducts.length} produk. Gunakan pencarian untuk menemukan produk tertentu.
                   </div>
                 )}
               </CardContent>
@@ -441,11 +438,25 @@ export default function Products() {
           </>
         )}
 
-        {!selectedAccount && (
+        {!selectedAccount && !isInitialLoading && studios.length > 0 && (
           <Card>
-            <CardContent className="py-12 text-center">
-              <Package className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-              <p className="text-muted-foreground">Pilih studio dan akun untuk melihat gudang produk</p>
+            <CardContent className="p-12 text-center">
+              <Package className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
+              <h3 className="text-xl font-semibold mb-2">Pilih Akun Shopee</h3>
+              <p className="text-muted-foreground">Pilih studio dan akun untuk melihat produk</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {!isInitialLoading && studios.length === 0 && (
+          <Card>
+            <CardContent className="p-12 text-center">
+              <Package className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
+              <h3 className="text-xl font-semibold mb-2">Belum Ada Studio</h3>
+              <p className="text-muted-foreground mb-4">Buat studio terlebih dahulu untuk mengelola produk</p>
+              <Button variant="outline" asChild>
+                <a href="/studios">Buat Studio</a>
+              </Button>
             </CardContent>
           </Card>
         )}
