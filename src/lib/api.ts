@@ -147,12 +147,35 @@ class ApiClient {
     return this.request<any[]>(`/api/optimize/rotation?${params}`);
   }
 
-  async setRotation(studioId: string, accountId: string, products: string[]) {
+  async setRotation(studioId: string, accountId: string, products: Array<string | { product_uid?: string; product_name: string }>) {
     return this.request('/api/optimize/rotation', { method: 'POST', body: JSON.stringify({ studioId, accountId, products }) });
   }
 
-  async runOptimization(data: { studioId: string; accountId: string; productsToAdd?: string[]; productsToRemove?: string[] }) {
+  async runOptimization(data: { studioId: string; accountId: string; productsToAdd?: any[]; productsToRemove?: any[] }) {
     return this.request('/api/optimize/run', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async analyzeDead(data: { studioId: string; accountId: string; daysThreshold?: number; minClicks?: number }) {
+    return this.request<{
+      summary: { total_active: number; dead: number; underperforming: number; performing: number; locked: number };
+      deadProducts: any[];
+      underperforming: any[];
+      activeProducts: any[];
+      lockedProducts: any[];
+      suggestedReplacements: any[];
+    }>('/api/optimize/analyze-dead', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async autoOptimize(data: { studioId: string; accountId: string; deadProductIds: string[]; replacementProducts: any[] }) {
+    return this.request<{ success: boolean; removed: number; added: number; details: any }>('/api/optimize/auto-optimize', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async getOptimizationHistory(studioId?: string, accountId?: string, limit?: number) {
+    const params = new URLSearchParams();
+    if (studioId) params.append('studioId', studioId);
+    if (accountId) params.append('accountId', accountId);
+    if (limit) params.append('limit', limit.toString());
+    return this.request<any[]>(`/api/optimize/history?${params}`);
   }
 
   // Admin
