@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Users, Plus, Pencil, Trash2, Store, ExternalLink } from 'lucide-react';
@@ -20,19 +20,18 @@ export default function Accounts() {
   const [accounts, setAccounts] = useState<(ShopeeAccount & { studio_name?: string })[]>([]);
   const [studios, setStudios] = useState<Studio[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<ShopeeAccount | null>(null);
   const [formData, setFormData] = useState({ name: '', shop_url: '', studio_id: '' });
 
-  useEffect(() => {
-    if (user) {
-      fetchData();
+  const fetchData = useCallback(async () => {
+    if (!user?.id) return;
+    
+    if (isInitialLoad) {
+      setLoading(true);
     }
-  }, [user]);
-
-  const fetchData = async () => {
-    if (!user) return;
-    setLoading(true);
+    
     try {
       const [accountsRes, studiosRes] = await Promise.all([
         supabase.from('shopee_accounts').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
@@ -56,8 +55,15 @@ export default function Accounts() {
       toast.error('Gagal memuat data');
     } finally {
       setLoading(false);
+      setIsInitialLoad(false);
     }
-  };
+  }, [user?.id, isInitialLoad]);
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchData();
+    }
+  }, [user?.id, fetchData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,15 +125,17 @@ export default function Accounts() {
     setDialogOpen(true);
   };
 
-  // Group accounts by studio
-  const groupedAccounts = accounts.reduce((acc, account) => {
-    const studioId = account.studio_id;
-    if (!acc[studioId]) {
-      acc[studioId] = { name: account.studio_name || 'Unknown', accounts: [] };
-    }
-    acc[studioId].accounts.push(account);
-    return acc;
-  }, {} as Record<string, { name: string; accounts: typeof accounts }>);
+  // Memoize grouped accounts to prevent recalculation on every render
+  const groupedAccounts = useMemo(() => {
+    return accounts.reduce((acc, account) => {
+      const studioId = account.studio_id;
+      if (!acc[studioId]) {
+        acc[studioId] = { name: account.studio_name || 'Unknown', accounts: [] };
+      }
+      acc[studioId].accounts.push(account);
+      return acc;
+    }, {} as Record<string, { name: string; accounts: typeof accounts }>);
+  }, [accounts]);
 
   return (
     <AppLayout>
@@ -137,14 +145,14 @@ export default function Accounts() {
             <h1 className="text-3xl font-display font-bold">Akun Shopee</h1>
             <p className="text-muted-foreground mt-1">Kelola akun toko Shopee Anda</p>
           </div>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="gradient" onClick={openCreateDialog} disabled={studios.length === 0}>
-                <Plus className="w-5 h-5" />
-                Tambah Akun
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
+          <Button variant="gradient" onClick={openCreateDialog} disabled={studios.length === 0}>
+            <Plus className="w-5 h-5" />
+            Tambah Akun
+          </Button>
+        </div>
+
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogContent>
               <DialogHeader>
                 <DialogTitle>{editingAccount ? 'Edit Akun' : 'Tambah Akun Baru'}</DialogTitle>
               </DialogHeader>
@@ -193,22 +201,10 @@ export default function Accounts() {
                   </Button>
                 </div>
               </form>
-            </DialogContent>
-          </Dialog>
-        </div>
+          </DialogContent>
+        </Dialog>
 
-        {studios.length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="p-12 text-center">
-              <Store className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
-              <h3 className="text-xl font-semibold mb-2">Buat Studio Terlebih Dahulu</h3>
-              <p className="text-muted-foreground mb-6">Anda perlu membuat studio sebelum menambahkan akun</p>
-              <Button variant="gradient" asChild>
-                <a href="/studios">Buat Studio</a>
-              </Button>
-            </CardContent>
-          </Card>
-        ) : loading ? (
+        {isInitialLoad && loading ? (
           <div className="space-y-6">
             {[1, 2].map((i) => (
               <Card key={i} className="animate-pulse">
@@ -219,6 +215,17 @@ export default function Accounts() {
               </Card>
             ))}
           </div>
+        ) : studios.length === 0 ? (
+          <Card className="border-dashed">
+            <CardContent className="p-12 text-center">
+              <Store className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
+              <h3 className="text-xl font-semibold mb-2">Buat Studio Terlebih Dahulu</h3>
+              <p className="text-muted-foreground mb-6">Anda perlu membuat studio sebelum menambahkan akun</p>
+              <Button variant="gradient" asChild>
+                <a href="/studios">Buat Studio</a>
+              </Button>
+            </CardContent>
+          </Card>
         ) : accounts.length === 0 ? (
           <Card className="border-dashed">
             <CardContent className="p-12 text-center">
