@@ -67,7 +67,6 @@ export default function Optimize() {
   useEffect(() => {
     if (selectedStudio) {
       fetchAccounts(selectedStudio);
-      setSelectedAccount('');
     }
   }, [selectedStudio]);
 
@@ -75,12 +74,20 @@ export default function Optimize() {
     if (!user) return;
     const { data } = await supabase.from('studios').select('*').eq('user_id', user.id).order('name');
     setStudios(data || []);
+    // Auto-select first studio
+    if (data && data.length > 0 && !selectedStudio) {
+      setSelectedStudio(data[0].id);
+    }
   };
 
   const fetchAccounts = async (studioId: string) => {
     if (!user) return;
     const { data } = await supabase.from('shopee_accounts').select('*').eq('studio_id', studioId).order('name');
     setAccounts(data || []);
+    // Auto-select first account
+    if (data && data.length > 0) {
+      setSelectedAccount(data[0].id);
+    }
   };
 
   const parseCSVLine = (line: string): string[] => {
