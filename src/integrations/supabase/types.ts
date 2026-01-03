@@ -20,6 +20,7 @@ export type Database = {
           id: string
           locked_at: string | null
           product_name: string
+          product_uid: string | null
           studio_id: string
           user_id: string
         }
@@ -28,6 +29,7 @@ export type Database = {
           id?: string
           locked_at?: string | null
           product_name: string
+          product_uid?: string | null
           studio_id: string
           user_id: string
         }
@@ -36,6 +38,7 @@ export type Database = {
           id?: string
           locked_at?: string | null
           product_name?: string
+          product_uid?: string | null
           studio_id?: string
           user_id?: string
         }
@@ -101,6 +104,36 @@ export type Database = {
           },
         ]
       }
+      product_aliases: {
+        Row: {
+          alias_name: string
+          created_at: string
+          id: string
+          product_uid: string
+          source: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          alias_name: string
+          created_at?: string
+          id?: string
+          product_uid: string
+          source?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          alias_name?: string
+          created_at?: string
+          id?: string
+          product_uid?: string
+          source?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       product_master: {
         Row: {
           account_id: string | null
@@ -109,6 +142,7 @@ export type Database = {
           created_at: string | null
           id: string
           product_name: string
+          product_uid: string | null
           user_id: string
         }
         Insert: {
@@ -118,6 +152,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           product_name: string
+          product_uid?: string | null
           user_id: string
         }
         Update: {
@@ -127,6 +162,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           product_name?: string
+          product_uid?: string | null
           user_id?: string
         }
         Relationships: [
@@ -152,6 +188,7 @@ export type Database = {
           orders_created: number | null
           orders_shipped: number | null
           product_name: string
+          product_uid: string | null
           products_sold_created: number | null
           products_sold_shipped: number | null
           ranking: number | null
@@ -171,6 +208,7 @@ export type Database = {
           orders_created?: number | null
           orders_shipped?: number | null
           product_name: string
+          product_uid?: string | null
           products_sold_created?: number | null
           products_sold_shipped?: number | null
           ranking?: number | null
@@ -190,6 +228,7 @@ export type Database = {
           orders_created?: number | null
           orders_shipped?: number | null
           product_name?: string
+          product_uid?: string | null
           products_sold_created?: number | null
           products_sold_shipped?: number | null
           ranking?: number | null
@@ -305,6 +344,57 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      tenants: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          product_uid: string
+          rented_at: string
+          returned_at: string | null
+          studio_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          product_uid: string
+          rented_at?: string
+          returned_at?: string | null
+          studio_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          product_uid?: string
+          rented_at?: string
+          returned_at?: string | null
+          studio_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenants_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "shopee_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenants_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "studios"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
