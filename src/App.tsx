@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { UserRoleProvider, useUserRole } from "@/hooks/useUserRole";
+import { GlobalSelectionProvider } from "@/hooks/useGlobalSelection";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -103,7 +104,9 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <UserRoleProvider>
-            <AppRoutes />
+            <GlobalSelectionProvider>
+              <AppRoutes />
+            </GlobalSelectionProvider>
           </UserRoleProvider>
         </AuthProvider>
       </BrowserRouter>

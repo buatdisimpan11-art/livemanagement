@@ -16,8 +16,9 @@ import { cn } from '@/lib/utils';
 import type { Tables } from '@/integrations/supabase/types';
 import type { DateRange } from 'react-day-picker';
 import { PerformanceTrendChart } from '@/components/statistics/PerformanceTrendChart';
-type Studio = Tables<'studios'>;
-type ShopeeAccount = Tables<'shopee_accounts'>;
+import { useGlobalSelection } from '@/hooks/useGlobalSelection';
+import { useStudiosQuery } from '@/hooks/useStudiosQuery';
+import { useAccountsQuery } from '@/hooks/useAccountsQuery';
 
 interface ProductStatistic {
   id: string;
@@ -41,10 +42,10 @@ interface AggregatedStats {
 
 export default function Statistics() {
   const { user } = useAuth();
-  const [studios, setStudios] = useState<Studio[]>([]);
-  const [accounts, setAccounts] = useState<ShopeeAccount[]>([]);
-  const [selectedStudio, setSelectedStudio] = useState('');
-  const [selectedAccount, setSelectedAccount] = useState('');
+  const { selectedStudio, setSelectedStudio, selectedAccount, setSelectedAccount } = useGlobalSelection();
+  const { data: studios = [], isLoading: studiosLoading } = useStudiosQuery();
+  const { data: accounts = [], isLoading: accountsLoading } = useAccountsQuery(selectedStudio);
+  
   const [statistics, setStatistics] = useState<ProductStatistic[]>([]);
   const [loading, setLoading] = useState(false);
   const [period, setPeriod] = useState<'day' | 'yesterday' | 'week' | 'month' | 'year' | 'custom'>('day');
@@ -52,41 +53,37 @@ export default function Statistics() {
   const [sortColumn, setSortColumn] = useState<'ranking' | 'clicks' | 'add_to_cart' | 'products_sold_created' | 'gmv_created'>('ranking');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
+  // Auto-select first studio when studios load
   useEffect(() => {
-    if (user) fetchStudios();
-  }, [user]);
-
-  useEffect(() => {
-    if (selectedStudio) {
-      fetchAccounts(selectedStudio);
+    if (studios.length > 0 && !selectedStudio) {
+      setSelectedStudio(studios[0].id);
     }
-  }, [selectedStudio]);
+  }, [studios, selectedStudio, setSelectedStudio]);
+
+  // Auto-select first account when accounts load
+  useEffect(() => {
+    if (accounts.length > 0 && !selectedAccount) {
+      setSelectedAccount(accounts[0].id);
+    }
+  }, [accounts, selectedAccount, setSelectedAccount]);
+
+  // Clear account when studio changes if account doesn't belong to new studio
+  useEffect(() => {
+    if (selectedAccount && accounts.length > 0) {
+      const accountExists = accounts.some(a => a.id === selectedAccount);
+      if (!accountExists) {
+        setSelectedAccount(accounts[0].id);
+      }
+    } else if (accounts.length === 0 && selectedAccount) {
+      setSelectedAccount('');
+    }
+  }, [accounts, selectedAccount, setSelectedAccount]);
 
   useEffect(() => {
     if (selectedAccount) {
       fetchStatistics();
     }
   }, [selectedAccount]);
-
-  const fetchStudios = async () => {
-    if (!user) return;
-    const { data } = await supabase.from('studios').select('*').eq('user_id', user.id).order('name');
-    setStudios(data || []);
-    // Auto-select first studio
-    if (data && data.length > 0 && !selectedStudio) {
-      setSelectedStudio(data[0].id);
-    }
-  };
-
-  const fetchAccounts = async (studioId: string) => {
-    if (!user) return;
-    const { data } = await supabase.from('shopee_accounts').select('*').eq('studio_id', studioId).order('name');
-    setAccounts(data || []);
-    // Auto-select first account
-    if (data && data.length > 0) {
-      setSelectedAccount(data[0].id);
-    }
-  };
 
   const fetchStatistics = async () => {
     if (!user || !selectedAccount) return;
@@ -234,7 +231,7 @@ export default function Statistics() {
                 <label className="text-sm font-medium">Studio</label>
                 <Select value={selectedStudio} onValueChange={setSelectedStudio}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Pilih studio" />
+                    <SelectValue placeholder={studiosLoading ? "Memuat..." : "Pilih studio"} />
                   </SelectTrigger>
                   <SelectContent>
                     {studios.map((studio) => (
@@ -249,7 +246,7 @@ export default function Statistics() {
                 <label className="text-sm font-medium">Akun Shopee</label>
                 <Select value={selectedAccount} onValueChange={setSelectedAccount} disabled={!selectedStudio}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Pilih akun" />
+                    <SelectValue placeholder={accountsLoading ? "Memuat..." : "Pilih akun"} />
                   </SelectTrigger>
                   <SelectContent>
                     {accounts.map((account) => (
@@ -422,9 +419,9 @@ export default function Statistics() {
                       ))}
                     </TabsList>
                     
-                    {Object.entries(groupedByDate).slice(0, 7).map(([date, products]) => (
+                    {Object.entries(groupedByDate).map(([date, products]) => (
                       <TabsContent key={date} value={date}>
-                        <div className="max-h-[500px] overflow-auto border rounded-lg">
+                        <div className="rounded-md border overflow-x-auto">
                           <Table>
                             <TableHeader>
                               <TableRow>
@@ -452,27 +449,6 @@ export default function Statistics() {
                             </TableBody>
                           </Table>
                         </div>
-                        
-                        <div className="mt-4 p-4 bg-muted/50 rounded-lg">
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                            <div>
-                              <span className="text-muted-foreground">Total Klik:</span>
-                              <span className="ml-2 font-medium">{products.reduce((s, p) => s + (p.clicks || 0), 0).toLocaleString('id-ID')}</span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">Total Keranjang:</span>
-                              <span className="ml-2 font-medium">{products.reduce((s, p) => s + (p.add_to_cart || 0), 0).toLocaleString('id-ID')}</span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">Total Terjual:</span>
-                              <span className="ml-2 font-medium">{products.reduce((s, p) => s + (p.products_sold_created || 0), 0).toLocaleString('id-ID')}</span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">Total GMV:</span>
-                              <span className="ml-2 font-medium">{formatCurrency(products.reduce((s, p) => s + (Number(p.gmv_created) || 0), 0))}</span>
-                            </div>
-                          </div>
-                        </div>
                       </TabsContent>
                     ))}
                   </Tabs>
@@ -480,15 +456,6 @@ export default function Statistics() {
               </CardContent>
             </Card>
           </>
-        )}
-
-        {!selectedAccount && studios.length > 0 && (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <BarChart3 className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-              <p className="text-muted-foreground">Pilih studio dan akun untuk melihat statistik</p>
-            </CardContent>
-          </Card>
         )}
       </div>
     </AppLayout>
