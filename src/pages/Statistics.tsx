@@ -15,7 +15,7 @@ import { id } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import type { Tables } from '@/integrations/supabase/types';
 import type { DateRange } from 'react-day-picker';
-
+import { PerformanceTrendChart } from '@/components/statistics/PerformanceTrendChart';
 type Studio = Tables<'studios'>;
 type ShopeeAccount = Tables<'shopee_accounts'>;
 
@@ -347,6 +347,9 @@ export default function Statistics() {
                 <span>Data tersedia: {aggregatedStats.uploadDates.map(d => format(parseISO(d), 'dd MMM yyyy', { locale: id })).join(', ')}</span>
               </div>
             )}
+
+            {/* Performance Trend Chart */}
+            <PerformanceTrendChart statistics={statistics} />
 
             {/* Data Table by Date */}
             <Card>
